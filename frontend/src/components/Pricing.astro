@@ -1,0 +1,97 @@
+---
+const plans = [
+  {
+    name: "Free",
+    price: "0",
+    period: "",
+    description: "まずは無料で試してみてください",
+    features: [
+      "1日5枚まで処理",
+      "月間50枚まで",
+      "最大4000px",
+      "処理結果を1時間保持",
+      "JPEG出力",
+    ],
+    cta: "無料で始める",
+    href: "/login",
+    highlight: false,
+  },
+  {
+    name: "Pro",
+    price: "---",
+    period: "",
+    description: "近日公開予定",
+    features: [
+      "1日50枚まで処理",
+      "月間500枚まで",
+      "最大8000px",
+      "処理結果を24時間保持",
+      "JPEG + TIFF出力",
+      "バッチ処理対応",
+      "パラメータ手動調整",
+    ],
+    cta: "Coming Soon",
+    href: "#",
+    highlight: true,
+  },
+];
+---
+
+<section id="pricing" class="py-24 px-4">
+  <div class="max-w-4xl mx-auto">
+    <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">料金プラン</h2>
+    <p class="text-surface-400 text-center mb-16 text-lg">
+      無料プランで十分な処理枚数。プロ向け機能は近日公開。
+    </p>
+
+    <div class="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+      {plans.map((plan) => (
+        <div
+          class:list={[
+            "relative p-8 rounded-2xl border transition-all duration-300 flex flex-col",
+            plan.highlight
+              ? "bg-brand-500/5 border-brand-500/30"
+              : "bg-surface-800/50 border-surface-700/50 hover:border-surface-600",
+          ]}
+        >
+          {plan.highlight && (
+            <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-xs font-semibold px-4 py-1 rounded-full">
+              COMING SOON
+            </div>
+          )}
+
+          <h3 class="text-2xl font-bold mb-1">{plan.name}</h3>
+          <p class="text-surface-400 text-sm mb-6">{plan.description}</p>
+
+          <div class="mb-8">
+            <span class="text-4xl font-extrabold">{plan.price === "0" ? "無料" : plan.price}</span>
+            {plan.period && <span class="text-surface-400 ml-1">{plan.period}</span>}
+          </div>
+
+          <ul class="space-y-3 mb-8 flex-1">
+            {plan.features.map((feature) => (
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-brand-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+                <span class="text-surface-300">{feature}</span>
+              </li>
+            ))}
+          </ul>
+
+          <a
+            href={plan.href}
+            class:list={[
+              "block w-full text-center py-3 px-6 rounded-xl font-semibold transition-all duration-200",
+              plan.highlight
+                ? "bg-surface-700 text-surface-400 cursor-not-allowed"
+                : "bg-brand-500 hover:bg-brand-600 text-white",
+            ]}
+          >
+            {plan.cta}
+          </a>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

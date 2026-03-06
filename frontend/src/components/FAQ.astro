@@ -1,0 +1,56 @@
+---
+const faqs = [
+  {
+    q: "どのような写真に効果がありますか？",
+    a: "逆光や影で顔が暗くなった人物写真に最も効果的です。横顔、帽子着用、複数人が写っている写真にも対応しています。風景のみの写真や顔が写っていない写真には効果がありません。",
+  },
+  {
+    q: "処理にどのくらい時間がかかりますか？",
+    a: "通常5〜15秒で処理が完了します。初回アクセス時はサーバーの起動に20〜40秒かかる場合がありますが、2枚目以降は高速に処理されます。",
+  },
+  {
+    q: "背景は変わりませんか？",
+    a: "はい、補正対象外のピクセルは元画像と数学的に同一です。マスク外の領域は1ビットも変更されません。",
+  },
+  {
+    q: "アップロードした画像はどうなりますか？",
+    a: "処理後1時間で自動的に削除されます。画像は処理目的以外には使用しません。",
+  },
+  {
+    q: "スマートフォンからも使えますか？",
+    a: "はい、レスポンシブ対応しておりスマートフォンのブラウザからもご利用いただけます。",
+  },
+  {
+    q: "既存の写真編集ソフトとの違いは？",
+    a: "Photoshop等では顔領域の手動選択やパラメータ調整に1枚8〜12分かかりますが、本ツールは全自動で5〜15秒。映像制作ソフトの無料版では5000px以上の画像が扱えない場合がありますが、本ツールには解像度制限がありません。",
+  },
+];
+---
+
+<section id="faq" class="py-24 px-4 bg-surface-900/50">
+  <div class="max-w-3xl mx-auto">
+    <h2 class="text-3xl md:text-4xl font-bold text-center mb-16">FAQ</h2>
+
+    <div class="space-y-4">
+      {faqs.map((faq) => (
+        <details class="group bg-surface-800/50 border border-surface-700/50 rounded-xl overflow-hidden">
+          <summary class="flex items-center justify-between p-6 cursor-pointer list-none hover:bg-surface-800 transition-colors">
+            <span class="font-medium text-surface-100 pr-4">{faq.q}</span>
+            <svg
+              class="w-5 h-5 text-surface-400 flex-shrink-0 transition-transform duration-200 group-open:rotate-180"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </summary>
+          <div class="px-6 pt-2 pb-6 text-surface-400 text-sm leading-relaxed">
+            {faq.a}
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,20 @@
+---
+import Layout from "../layouts/Layout.astro";
+import ImageProcessor from "../components/ImageProcessor";
+---
+
+<Layout title="画像処理 - Face Brighten">
+  <ImageProcessor client:load />
+</Layout>
+
+<script>
+  import { supabase } from "../lib/supabase";
+
+  // Check auth on page load
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    window.location.href = "/login";
+  }
+</script>

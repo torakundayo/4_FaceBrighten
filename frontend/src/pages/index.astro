@@ -1,0 +1,198 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BeforeAfterSlider from "../components/BeforeAfterSlider";
+import Features from "../components/Features.astro";
+import ProcessFlow from "../components/ProcessFlow.astro";
+import Pricing from "../components/Pricing.astro";
+import FAQ from "../components/FAQ.astro";
+---
+
+<Layout title="Face Brighten - 逆光写真の顔を自動補正">
+  {/* Navigation */}
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-surface-950/80 backdrop-blur-xl border-b border-surface-800/50">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+          </svg>
+        </div>
+        <span class="font-bold text-lg">Face Brighten</span>
+      </a>
+      <div class="hidden md:flex items-center gap-8 text-sm text-surface-400">
+        <a href="#demo" class="hover:text-surface-100 transition-colors">デモ</a>
+        <a href="#features" class="hover:text-surface-100 transition-colors">特長</a>
+        <a href="#process" class="hover:text-surface-100 transition-colors">処理フロー</a>
+        <a href="#pricing" class="hover:text-surface-100 transition-colors">料金</a>
+        <a href="#faq" class="hover:text-surface-100 transition-colors">FAQ</a>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/login" class="text-sm text-surface-300 hover:text-surface-100 transition-colors">
+          ログイン
+        </a>
+        <a
+          href="/login"
+          class="text-sm bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          無料で試す
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    {/* Hero Section */}
+    <section class="pt-32 pb-16 px-4">
+      <div class="max-w-4xl mx-auto text-center">
+        <div class="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm px-4 py-1.5 rounded-full mb-8">
+          <span class="w-2 h-2 bg-brand-400 rounded-full animate-pulse"></span>
+          AI搭載 &middot; 全自動 &middot; プロ品質
+        </div>
+        <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-6">
+          逆光写真の顔を、<br />
+          <span class="bg-gradient-to-r from-brand-400 to-brand-300 bg-clip-text text-transparent">
+            プロ品質で自動補正
+          </span>
+        </h1>
+        <p class="text-lg md:text-xl text-surface-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+          SegFormer AIが顔をピクセル単位で認識し、映画制作と同じ手法のカラーグレーディングで自然に補正。背景は1ピクセルも変えません。
+        </p>
+        <div class="flex items-center justify-center">
+          <a
+            href="/login"
+            class="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-8 py-3.5 rounded-xl font-semibold text-lg transition-all hover:shadow-lg hover:shadow-brand-500/25"
+          >
+            無料で試す
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+          </a>
+        </div>
+        <p class="text-surface-500 text-sm mt-4">
+          登録不要でデモを確認できます &middot; 無料プランは1日5枚まで
+        </p>
+      </div>
+    </section>
+
+    {/* Before/After Demo */}
+    <section id="demo" class="py-16 px-4">
+      <div class="max-w-3xl mx-auto">
+        <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">
+          Before / After
+        </h2>
+        <p class="text-surface-400 text-center mb-10 text-lg">
+          スライダーを左右に動かして、補正前後を比較できます
+        </p>
+        <BeforeAfterSlider
+          client:visible
+          beforeSrc="/demo/before.jpg"
+          afterSrc="/demo/after.jpg"
+          beforeLabel="補正前"
+          afterLabel="補正後"
+        />
+        <div class="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-surface-500">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+            背景の変更: 0ピクセル
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 bg-brand-400 rounded-full"></span>
+            顔の輝度変化: +13.0
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 bg-amber-400 rounded-full"></span>
+            処理時間: 8秒
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Features */}
+    <Features />
+
+    {/* Process Flow */}
+    <ProcessFlow />
+
+    {/* How to Use */}
+    <section class="py-24 px-4 bg-surface-900/50">
+      <div class="max-w-4xl mx-auto">
+        <h2 class="text-3xl md:text-4xl font-bold text-center mb-16">使い方</h2>
+        <div class="grid md:grid-cols-3 gap-6">
+          <div class="group relative bg-surface-800/30 border border-surface-700/40 rounded-xl p-6 text-center hover:border-brand-500/20 transition-all duration-300">
+            <div class="w-14 h-14 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-5 group-hover:bg-brand-500/15 group-hover:shadow-[0_0_20px_rgba(12,147,233,0.1)] transition-all duration-300">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+              </svg>
+            </div>
+            <span class="text-brand-400 font-mono text-xs font-semibold tracking-wider opacity-60 mb-2 block">STEP 01</span>
+            <h3 class="text-lg font-bold mb-2">アップロード</h3>
+            <p class="text-surface-400 text-sm leading-relaxed">
+              補正したい写真をドラッグ&ドロップ、またはクリックして選択
+            </p>
+          </div>
+          <div class="group relative bg-surface-800/30 border border-surface-700/40 rounded-xl p-6 text-center hover:border-brand-500/20 transition-all duration-300">
+            <div class="w-14 h-14 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-5 group-hover:bg-brand-500/15 group-hover:shadow-[0_0_20px_rgba(12,147,233,0.1)] transition-all duration-300">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
+              </svg>
+            </div>
+            <span class="text-brand-400 font-mono text-xs font-semibold tracking-wider opacity-60 mb-2 block">STEP 02</span>
+            <h3 class="text-lg font-bold mb-2">自動処理</h3>
+            <p class="text-surface-400 text-sm leading-relaxed">
+              AIが顔を認識し、プロ品質のカラーグレーディングを自動実行
+            </p>
+          </div>
+          <div class="group relative bg-surface-800/30 border border-surface-700/40 rounded-xl p-6 text-center hover:border-brand-500/20 transition-all duration-300">
+            <div class="w-14 h-14 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-5 group-hover:bg-brand-500/15 group-hover:shadow-[0_0_20px_rgba(12,147,233,0.1)] transition-all duration-300">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+            </div>
+            <span class="text-brand-400 font-mono text-xs font-semibold tracking-wider opacity-60 mb-2 block">STEP 03</span>
+            <h3 class="text-lg font-bold mb-2">ダウンロード</h3>
+            <p class="text-surface-400 text-sm leading-relaxed">
+              Before/Afterを確認して、補正済み画像をダウンロード
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Pricing */}
+    <Pricing />
+
+    {/* FAQ */}
+    <FAQ />
+
+    {/* CTA */}
+    <section class="py-24 px-4">
+      <div class="max-w-2xl mx-auto text-center">
+        <h2 class="text-3xl md:text-4xl font-bold mb-6">
+          逆光写真を、今すぐ補正
+        </h2>
+        <p class="text-surface-400 text-lg mb-10">
+          無料で1日5枚まで。アカウント登録は30秒で完了します。
+        </p>
+        <a
+          href="/login"
+          class="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-10 py-4 rounded-xl font-semibold text-lg transition-all hover:shadow-lg hover:shadow-brand-500/25"
+        >
+          無料で始める
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+          </svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  {/* Footer */}
+  <footer class="border-t border-surface-800/50 py-8 px-4">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-surface-500">
+      <p>&copy; 2026 Face Brighten. All rights reserved.</p>
+      <div class="flex items-center gap-6">
+        <span>Powered by SegFormer AI + Cinema-Grade Color Grading</span>
+      </div>
+    </div>
+  </footer>
+</Layout>
