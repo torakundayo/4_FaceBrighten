@@ -1,6 +1,16 @@
 import type { APIRoute } from "astro";
+import { verifyAuth } from "../../lib/auth";
 
-export const POST: APIRoute = async () => {
+export const POST: APIRoute = async ({ request }) => {
+  // 認証チェック（未認証ユーザーによるGPUコスト攻撃を防止）
+  const auth = await verifyAuth(request);
+  if ("error" in auth) {
+    return new Response(JSON.stringify({ error: auth.error }), {
+      status: auth.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const modalUrl = import.meta.env.MODAL_WARMUP_URL;
   if (!modalUrl) {
     return new Response(JSON.stringify({ status: "skipped" }), {

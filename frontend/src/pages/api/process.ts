@@ -1,11 +1,18 @@
 import type { APIRoute } from "astro";
 import { verifyAuth, createServerSupabase } from "../../lib/auth";
+import { DAILY_LIMIT, MONTHLY_LIMIT } from "../../lib/constants";
+import { detectImageType, safeErrorMessage, getAllowedOrigins } from "../../lib/validation";
 
-const DAILY_LIMIT = 5;
-const MONTHLY_LIMIT = 50;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  // CSRF保護: Origin/Refererヘッダーの検証
+  const origin = request.headers.get("Origin") || request.headers.get("Referer") || "";
+  const allowedOrigins = getAllowedOrigins(import.meta.env.ALLOWED_ORIGINS);
+  if (!allowedOrigins.some((o) => origin.startsWith(o))) {
+    return jsonResponse({ error: "Forbidden" }, 403);
+  }
+
   // 1. 認証チェック
   const auth = await verifyAuth(request);
   if ("error" in auth) {
@@ -14,7 +21,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const supabase = createServerSupabase();
 
-  // 2. レート制限チェック
+  // 2. レート制限チェック + ロック（競合状態対策）
+  // まず processing ステータスのレコードを先に挿入して排他制御
+  // activeCount チェックで同時実行を防止
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -76,28 +85,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return jsonResponse({ error: "画像ファイルを選択してください" }, 400);
   }
 
-  // 4. R2にアップロード
-  const uuid = crypto.randomUUID();
-  const ext = file.type === "image/png" ? ".png" : ".jpg";
-  const inputKey = `uploads/${auth.userId}/${uuid}${ext}`;
-
-  // Cloudflare Pages の env から R2 バケットを取得
-  const env = (locals as any).runtime?.env;
-  const r2Bucket = env?.R2_BUCKET;
-
-  if (!r2Bucket) {
-    // R2が利用できない場合（ローカル開発時など）
-    // Modal に直接画像を送る代替フロー
-    return await processDirectly(file, auth.userId, supabase);
+  // マジックバイトによる実際のファイル形式検証
+  const imageBuffer = await file.arrayBuffer();
+  const detectedType = detectImageType(imageBuffer);
+  if (!detectedType) {
+    return jsonResponse({ error: "対応していない画像形式です。JPG, PNG, WebP のみ対応しています" }, 400);
   }
 
-  const imageBuffer = await file.arrayBuffer();
-  await r2Bucket.put(inputKey, imageBuffer, {
-    httpMetadata: { contentType: file.type },
-  });
+  // 4. processing_logs に先に記録（競合状態対策: 先にロックを取る）
+  const uuid = crypto.randomUUID();
+  const ext = detectedType === "image/png" ? ".png" : ".jpg";
+  const inputKey = `uploads/${auth.userId}/${uuid}${ext}`;
 
-  // 5. processing_logs に記録
-  const { data: log } = await supabase
+  const { data: log, error: insertError } = await supabase
     .from("processing_logs")
     .insert({
       user_id: auth.userId,
@@ -107,6 +107,32 @@ export const POST: APIRoute = async ({ request, locals }) => {
     })
     .select()
     .single();
+
+  if (insertError) {
+    // INSERT失敗 = 競合状態で他のリクエストが先にprocessingレコードを作成した可能性
+    return jsonResponse(
+      { error: "現在処理中の画像があります。完了後にお試しください" },
+      429
+    );
+  }
+
+  // 5. R2にアップロード
+  const r2Bucket = (locals as CfLocals).runtime?.env?.R2_BUCKET;
+
+  if (!r2Bucket) {
+    await supabase
+      .from("processing_logs")
+      .update({ status: "failed" })
+      .eq("id", log.id);
+    return jsonResponse(
+      { error: "ストレージが設定されていません" },
+      500
+    );
+  }
+
+  await r2Bucket.put(inputKey, imageBuffer, {
+    httpMetadata: { contentType: detectedType },
+  });
 
   // 6. Modal API 呼び出し
   const modalUrl = import.meta.env.MODAL_PROCESS_URL;
@@ -124,24 +150,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (!modalRes.ok) {
       const errData = await modalRes.json().catch(() => ({}));
-      throw new Error(errData.error || "Modal processing failed");
+      throw new Error(errData.error || "Processing failed");
     }
 
     const result = await modalRes.json();
 
     // 7. processing_logs を更新（mask_imageはサイズが大きいのでDBには保存しない）
     const { mask_image, ...statsForDb } = result.stats ?? {};
-    if (log) {
-      await supabase
-        .from("processing_logs")
-        .update({
-          status: result.stats?.face_detected ? "completed" : "failed",
-          result_key: result.result_key,
-          process_sec: result.process_sec,
-          stats: statsForDb,
-        })
-        .eq("id", log.id);
-    }
+    await supabase
+      .from("processing_logs")
+      .update({
+        status: result.stats?.face_detected ? "completed" : "failed",
+        result_key: result.result_key,
+        process_sec: result.process_sec,
+        stats: statsForDb,
+      })
+      .eq("id", log.id);
 
     // 8. ダウンロードURL生成
     const downloadUrl = result.result_key
@@ -155,47 +179,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   } catch (err) {
     // エラー時: ログを failed に更新
-    if (log) {
-      await supabase
-        .from("processing_logs")
-        .update({ status: "failed" })
-        .eq("id", log.id);
-    }
+    await supabase
+      .from("processing_logs")
+      .update({ status: "failed" })
+      .eq("id", log.id);
 
     return jsonResponse(
-      {
-        error:
-          err instanceof Error ? err.message : "画像処理に失敗しました",
-      },
+      { error: safeErrorMessage(err) },
       500
     );
   }
 };
-
-/**
- * R2が無い環境での直接処理（ローカル開発用フォールバック）
- */
-async function processDirectly(
-  file: File,
-  userId: string,
-  supabase: any
-) {
-  const modalUrl = import.meta.env.MODAL_PROCESS_URL;
-  if (!modalUrl) {
-    return jsonResponse(
-      { error: "MODAL_PROCESS_URL が設定されていません" },
-      500
-    );
-  }
-
-  return jsonResponse(
-    {
-      error:
-        "R2バケットが設定されていません。SETUP.mdを参照してCloudflare R2を設定してください。",
-    },
-    500
-  );
-}
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {

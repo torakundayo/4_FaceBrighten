@@ -49,11 +49,18 @@ export default function ImageProcessor() {
   const isDraggingSlider = useRef(false);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 使用状況を取得
+  // 使用状況を取得 + プリウォーム
   useEffect(() => {
     fetchUsage();
-    // ページロード時にプリウォーム
-    fetch("/api/warmup", { method: "POST" }).catch(() => {});
+    // ページロード時にプリウォーム（認証付き）
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        fetch("/api/warmup", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => {});
+      }
+    });
   }, []);
 
   async function fetchUsage() {

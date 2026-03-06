@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { verifyAuth } from "../../lib/auth";
+import { isValidR2Key, isUserAuthorizedForKey } from "../../lib/validation";
 
 export const GET: APIRoute = async ({ request, locals }) => {
   // 認証チェック
@@ -21,19 +22,24 @@ export const GET: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  // ユーザーが自分のファイルのみアクセスできるようにチェック
-  if (!key.includes(auth.userId)) {
+  if (!isValidR2Key(key)) {
+    return new Response(JSON.stringify({ error: "Invalid key format" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!isUserAuthorizedForKey(key, auth.userId)) {
     return new Response(JSON.stringify({ error: "Forbidden" }), {
       status: 403,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  const env = (locals as any).runtime?.env;
-  const r2Bucket = env?.R2_BUCKET;
+  const r2Bucket = (locals as CfLocals).runtime?.env?.R2_BUCKET;
 
   if (!r2Bucket) {
-    return new Response(JSON.stringify({ error: "R2 not configured" }), {
+    return new Response(JSON.stringify({ error: "ストレージが設定されていません" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
@@ -41,7 +47,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
   const object = await r2Bucket.get(key);
   if (!object) {
-    return new Response(JSON.stringify({ error: "File not found" }), {
+    return new Response(JSON.stringify({ error: "ファイルが見つかりません" }), {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });
