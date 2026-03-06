@@ -42,7 +42,7 @@ export function getAllowedOrigins(envOrigins?: string): string[] {
     return envOrigins.split(",").map((o) => o.trim());
   }
   return [
-    "https://face-brighten.pages.dev",
+    "https://4-facebrighten.pages.dev",
     "http://localhost:4321",
     "http://localhost:8788",
   ];

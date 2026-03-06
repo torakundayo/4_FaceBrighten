@@ -89,7 +89,7 @@ describe("getAllowedOrigins", () => {
   it("returns defaults when no env var", () => {
     const origins = getAllowedOrigins();
     expect(origins).toEqual([
-      "https://face-brighten.pages.dev",
+      "https://4-facebrighten.pages.dev",
       "http://localhost:4321",
       "http://localhost:8788",
     ]);
