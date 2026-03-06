@@ -5,7 +5,7 @@ import { isValidR2Key, isUserAuthorizedForKey } from "../../lib/validation";
 export const GET: APIRoute = async ({ request, locals }) => {
   try {
   // 認証チェック
-  const auth = await verifyAuth(request);
+  const auth = await verifyAuth(request, locals as CfLocals);
   if ("error" in auth) {
     return new Response(JSON.stringify({ error: auth.error }), {
       status: auth.status,

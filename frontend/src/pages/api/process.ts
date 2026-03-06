@@ -7,20 +7,23 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
+  const cfLocals = locals as CfLocals;
+
   // CSRF保護: Origin/Refererヘッダーの検証
   const origin = request.headers.get("Origin") || request.headers.get("Referer") || "";
-  const allowedOrigins = getAllowedOrigins(import.meta.env.ALLOWED_ORIGINS);
+  const envOrigins = cfLocals.runtime?.env?.ALLOWED_ORIGINS || import.meta.env.ALLOWED_ORIGINS;
+  const allowedOrigins = getAllowedOrigins(envOrigins);
   if (!allowedOrigins.some((o) => origin.startsWith(o))) {
     return jsonResponse({ error: "Forbidden" }, 403);
   }
 
   // 1. 認証チェック
-  const auth = await verifyAuth(request);
+  const auth = await verifyAuth(request, cfLocals);
   if ("error" in auth) {
     return jsonResponse({ error: auth.error }, auth.status);
   }
 
-  const supabase = createServerSupabase();
+  const supabase = createServerSupabase(cfLocals);
 
   // 2. レート制限チェック + ロック（競合状態対策）
   // まず processing ステータスのレコードを先に挿入して排他制御
@@ -132,8 +135,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   // 6. R2アップロード + Modal API 呼び出し
-  const modalUrl = import.meta.env.MODAL_PROCESS_URL;
-  const apiSecret = import.meta.env.MODAL_API_SECRET;
+  const modalUrl = cfLocals.runtime?.env?.MODAL_PROCESS_URL || import.meta.env.MODAL_PROCESS_URL;
+  const apiSecret = cfLocals.runtime?.env?.MODAL_API_SECRET || import.meta.env.MODAL_API_SECRET;
 
   try {
     await r2Bucket.put(inputKey, imageBuffer, {

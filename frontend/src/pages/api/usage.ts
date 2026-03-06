@@ -2,9 +2,10 @@ import type { APIRoute } from "astro";
 import { verifyAuth, createServerSupabase } from "../../lib/auth";
 import { DAILY_LIMIT, MONTHLY_LIMIT, PROCESSING_TIMEOUT_MIN, LOG_RETENTION_DAYS } from "../../lib/constants";
 
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async ({ request, locals }) => {
   try {
-  const auth = await verifyAuth(request);
+  const cfLocals = locals as CfLocals;
+  const auth = await verifyAuth(request, cfLocals);
   if ("error" in auth) {
     return new Response(JSON.stringify({ error: auth.error }), {
       status: auth.status,
@@ -12,7 +13,7 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }
 
-  const supabase = createServerSupabase();
+  const supabase = createServerSupabase(cfLocals);
 
   // processing状態のタイムアウト復旧（全ユーザー対象: 5分以上前のprocessingをfailedに変更）
   const timeoutCutoff = new Date();

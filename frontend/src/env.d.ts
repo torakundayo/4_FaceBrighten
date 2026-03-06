@@ -29,6 +29,12 @@ interface CfR2Bucket {
 
 interface CfEnv {
   R2_BUCKET: CfR2Bucket;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_ROLE_KEY: string;
+  MODAL_PROCESS_URL: string;
+  MODAL_WARMUP_URL: string;
+  MODAL_API_SECRET: string;
+  ALLOWED_ORIGINS?: string;
 }
 
 interface CfRuntime {

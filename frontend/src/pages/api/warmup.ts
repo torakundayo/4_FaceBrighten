@@ -1,9 +1,10 @@
 import type { APIRoute } from "astro";
 import { verifyAuth } from "../../lib/auth";
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   // 認証チェック（未認証ユーザーによるGPUコスト攻撃を防止）
-  const auth = await verifyAuth(request);
+  const cfLocals = locals as CfLocals;
+  const auth = await verifyAuth(request, cfLocals);
   if ("error" in auth) {
     return new Response(JSON.stringify({ error: auth.error }), {
       status: auth.status,
@@ -11,7 +12,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  const modalUrl = import.meta.env.MODAL_WARMUP_URL;
+  const modalUrl = cfLocals.runtime?.env?.MODAL_WARMUP_URL || import.meta.env.MODAL_WARMUP_URL;
   if (!modalUrl) {
     return new Response(JSON.stringify({ status: "skipped" }), {
       status: 200,
