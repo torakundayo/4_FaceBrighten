@@ -2,13 +2,13 @@
 
 逆光・影で暗くなった人物写真の顔を、AI + プロ品質のカラーグレーディングで自動補正するWebツール。
 
-**Live Demo**: https://face-brighten.pages.dev/
+**公開URL**: https://face-brighten.pages.dev/
 
-## Overview
+## 概要
 
 SegFormer AIが顔をピクセル単位でセグメンテーションし、DaVinci Resolve式のLift/Gamma/Offset カラーグレーディングで顔の明るさを自然に補正します。背景は1ピクセルも変更しません。
 
-### Processing Pipeline
+### 処理パイプライン
 
 1. **SegFormer AI** - 顔のパーツをセマンティックセグメンテーション（肌・目・鼻・口・首など）
 2. **マスク生成** - 暗さの重み付け + ガウシアンブラーで滑らかな補正マスクを生成
@@ -16,93 +16,93 @@ SegFormer AIが顔をピクセル単位でセグメンテーションし、DaVin
 4. **スキントーン保持** - ベクトルスコープのスキントーンライン上に色を維持
 5. **肌スムージング** - バイラテラルフィルタで肌領域のみ軽くスムージング
 
-## Architecture
+## アーキテクチャ
 
 ```
-Browser
+ブラウザ
   │
   ├─→ Cloudflare Pages (Astro 5 SSR)
-  │     ├── LP (Landing Page)
-  │     ├── Auth (Supabase OAuth)
-  │     └── API Routes (/api/process, /api/download)
+  │     ├── ランディングページ
+  │     ├── 認証 (Supabase OAuth)
+  │     └── APIルート (/api/process, /api/download)
   │           │
-  │           ├─→ Supabase (Auth + Rate Limiting DB)
-  │           ├─→ Cloudflare R2 (Image Storage)
-  │           └─→ Modal.com (Serverless GPU - T4)
+  │           ├─→ Supabase (認証 + レート制限DB)
+  │           ├─→ Cloudflare R2 (画像ストレージ)
+  │           └─→ Modal.com (サーバーレスGPU - T4)
   │                 ├── SegFormer (jonathandinu/face-parsing)
-  │                 └── Color Grading Pipeline
+  │                 └── カラーグレーディングパイプライン
   │
-  └─← Result (Before/After Preview + Download)
+  └─← 結果 (Before/After プレビュー + ダウンロード)
 ```
 
-## Tech Stack
+## 技術スタック
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Frontend | Astro 5 + React 19 + Tailwind CSS v4 | SSR + Interactive Islands |
-| Hosting | Cloudflare Pages | SSR, API Routes, R2 binding |
-| Storage | Cloudflare R2 | Image upload/download (S3-compatible) |
-| Auth | Supabase Auth | Google OAuth, JWT |
-| Database | Supabase PostgreSQL | Rate limiting (processing_logs) |
-| GPU Backend | Modal.com (T4 GPU) | SegFormer inference + image processing |
-| AI Model | SegFormer (HuggingFace) | Face semantic segmentation |
+| レイヤー | 技術 | 用途 |
+|---------|------|------|
+| フロントエンド | Astro 5 + React 19 + Tailwind CSS v4 | SSR + インタラクティブIslands |
+| ホスティング | Cloudflare Pages | SSR、APIルート、R2バインディング |
+| ストレージ | Cloudflare R2 | 画像のアップロード/ダウンロード (S3互換) |
+| 認証 | Supabase Auth | Google OAuth、JWT |
+| データベース | Supabase PostgreSQL | レート制限 (processing_logs) |
+| GPUバックエンド | Modal.com (T4 GPU) | SegFormer推論 + 画像処理 |
+| AIモデル | SegFormer (HuggingFace) | 顔セマンティックセグメンテーション |
 
-## Project Structure
+## ディレクトリ構成
 
 ```
 4_FaceBrighten/
 ├── backend/
-│   ├── modal_app.py          # Modal serverless GPU app
-│   ├── image_processor.py    # Core image processing pipeline
+│   ├── modal_app.py          # Modal サーバーレスGPUアプリ
+│   ├── image_processor.py    # 画像処理コアロジック
 │   ├── requirements.txt
-│   └── SETUP.md              # Backend setup guide
+│   └── SETUP.md              # バックエンドセットアップガイド
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ImageProcessor.tsx   # Main processing UI
-│   │   │   ├── AuthForm.tsx         # Login/signup form
+│   │   │   ├── ImageProcessor.tsx   # メイン処理UI
+│   │   │   ├── AuthForm.tsx         # ログイン/サインアップ
 │   │   │   └── BeforeAfterSlider.tsx
 │   │   ├── pages/
-│   │   │   ├── index.astro          # Landing page
-│   │   │   ├── login.astro          # Auth page
-│   │   │   ├── app.astro            # Tool page (auth required)
+│   │   │   ├── index.astro          # ランディングページ
+│   │   │   ├── login.astro          # 認証ページ
+│   │   │   ├── app.astro            # ツール本体（要認証）
 │   │   │   └── api/
-│   │   │       ├── process.ts       # Image upload + Modal call
-│   │   │       ├── download.ts      # Authenticated R2 download
-│   │   │       ├── usage.ts         # Rate limit status
-│   │   │       └── warmup.ts        # GPU pre-warm
+│   │   │       ├── process.ts       # 画像アップロード + Modal呼び出し
+│   │   │       ├── download.ts      # 認証付きR2ダウンロード
+│   │   │       ├── usage.ts         # レート制限状況
+│   │   │       └── warmup.ts        # GPUプリウォーム
 │   │   ├── lib/
-│   │   │   ├── auth.ts              # Server-side JWT verification
-│   │   │   └── supabase.ts          # Client-side Supabase
+│   │   │   ├── auth.ts              # サーバーサイドJWT検証
+│   │   │   └── supabase.ts          # クライアントサイドSupabase
 │   │   └── layouts/
 │   │       └── Layout.astro
 │   ├── .env.example
 │   ├── wrangler.toml
-│   ├── SETUP.md              # Frontend setup guide
+│   ├── SETUP.md              # フロントエンドセットアップガイド
 │   └── package.json
-├── brighten_face.py          # Original standalone script
-├── face_segmentation.py      # Original standalone script
-└── PLAN.md                   # Detailed design document
+├── brighten_face.py          # 元のスタンドアロンスクリプト
+├── face_segmentation.py      # 元のスタンドアロンスクリプト
+└── PLAN.md                   # 詳細設計書
 ```
 
-## Setup
+## セットアップ
 
-### Prerequisites
+### 前提条件
 
 - Node.js 18+
 - Python 3.10+
 - [Modal CLI](https://modal.com/docs/guide)
-- Cloudflare account (Pages + R2)
-- Supabase account
+- Cloudflare アカウント (Pages + R2)
+- Supabase アカウント
 
-### 1. Backend (Modal.com)
+### 1. バックエンド (Modal.com)
 
 ```bash
 pip install modal
 modal setup
 
 cd backend
-# Create Modal secret with R2 credentials
+# R2認証情報を含むModal Secretを作成
 modal secret create r2-credentials \
   R2_ENDPOINT_URL="https://<account-id>.r2.cloudflarestorage.com" \
   R2_ACCESS_KEY_ID="..." \
@@ -110,16 +110,16 @@ modal secret create r2-credentials \
   R2_BUCKET_NAME="image-processing" \
   API_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 
-# Deploy
+# デプロイ
 python -m modal deploy modal_app.py
 ```
 
-### 2. Frontend (Cloudflare Pages)
+### 2. フロントエンド (Cloudflare Pages)
 
 ```bash
 cd frontend
 cp .env.example .env
-# Edit .env with your Supabase/Modal credentials
+# .env を編集してSupabase/Modalの認証情報を設定
 
 npm install
 npm run build
@@ -128,39 +128,39 @@ npx wrangler pages deploy dist --project-name=face-brighten
 
 ### 3. Supabase
 
-1. Create project at https://supabase.com
-2. Run the SQL schema from `frontend/SETUP.md` (processing_logs table + RLS)
-3. Enable Google OAuth in Authentication > Providers
-4. Set Site URL and Redirect URLs
+1. https://supabase.com でプロジェクトを作成
+2. `frontend/SETUP.md` のSQLスキーマを実行（processing_logsテーブル + RLS）
+3. Authentication > Providers で Google OAuthを有効化
+4. Site URLとRedirect URLsを設定
 
 ### 4. Cloudflare R2
 
-1. Create bucket: `image-processing`
-2. Bind to Pages: Settings > Functions > R2 bucket bindings > `R2_BUCKET`
+1. バケットを作成: `image-processing`
+2. Pagesにバインド: Settings > Functions > R2 bucket bindings > `R2_BUCKET`
 
-See [frontend/SETUP.md](frontend/SETUP.md) and [backend/SETUP.md](backend/SETUP.md) for detailed instructions.
+詳細は [frontend/SETUP.md](frontend/SETUP.md) と [backend/SETUP.md](backend/SETUP.md) を参照してください。
 
-## Rate Limits
+## 利用制限
 
-| | Free |
-|---|---|
-| Daily | 5 images |
-| Monthly | 50 images |
-| Max file size | 10 MB |
-| Max resolution | 4000 px (long side) |
-| Concurrent | 1 |
+| 項目 | 無料プラン |
+|------|-----------|
+| 1日あたり | 5枚 |
+| 1ヶ月あたり | 50枚 |
+| 最大ファイルサイズ | 10 MB |
+| 最大解像度 | 4000 px（長辺） |
+| 同時処理 | 1枚 |
 
-## Cost
+## 運用コスト
 
-All services used are within free tiers:
+すべて各サービスの無料枠内で運用可能です。
 
-| Service | Free Tier | Typical Usage |
-|---------|-----------|--------------|
-| Cloudflare Pages | Unlimited requests | - |
-| Cloudflare R2 | 10 GB storage, free egress | < 1 GB |
-| Supabase | 50K MAU, 500 MB DB | < 1K MAU |
-| Modal.com | $30/month GPU credit | ~$1-5/month |
+| サービス | 無料枠 | 想定使用量 |
+|---------|--------|-----------|
+| Cloudflare Pages | リクエスト無制限 | - |
+| Cloudflare R2 | 10 GBストレージ、送信無料 | 1 GB未満 |
+| Supabase | 50K MAU、500 MB DB | 1K MAU未満 |
+| Modal.com | $30/月 GPUクレジット | 約$1-5/月 |
 
-## License
+## ライセンス
 
 MIT
