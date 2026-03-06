@@ -150,11 +150,11 @@ export default function ImageProcessor() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "処理に失敗しました");
       }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!data.stats?.face_detected) {
         if (stepTimerRef.current) clearInterval(stepTimerRef.current);

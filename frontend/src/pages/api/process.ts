@@ -6,6 +6,7 @@ import { detectImageType, safeErrorMessage, getAllowedOrigins } from "../../lib/
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  try {
   // CSRF保護: Origin/Refererヘッダーの検証
   const origin = request.headers.get("Origin") || request.headers.get("Referer") || "";
   const allowedOrigins = getAllowedOrigins(import.meta.env.ALLOWED_ORIGINS);
@@ -130,15 +131,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  await r2Bucket.put(inputKey, imageBuffer, {
-    httpMetadata: { contentType: detectedType },
-  });
-
-  // 6. Modal API 呼び出し
+  // 6. R2アップロード + Modal API 呼び出し
   const modalUrl = import.meta.env.MODAL_PROCESS_URL;
   const apiSecret = import.meta.env.MODAL_API_SECRET;
 
   try {
+    await r2Bucket.put(inputKey, imageBuffer, {
+      httpMetadata: { contentType: detectedType },
+    });
     const modalRes = await fetch(modalUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -186,6 +186,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     return jsonResponse(
       { error: safeErrorMessage(err) },
+      500
+    );
+  }
+  } catch (outerErr) {
+    // ハンドラ全体の未処理例外をキャッチ（非JSONレスポンス防止）
+    return jsonResponse(
+      { error: safeErrorMessage(outerErr) },
       500
     );
   }

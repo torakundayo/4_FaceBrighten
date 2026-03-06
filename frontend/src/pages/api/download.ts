@@ -3,6 +3,7 @@ import { verifyAuth } from "../../lib/auth";
 import { isValidR2Key, isUserAuthorizedForKey } from "../../lib/validation";
 
 export const GET: APIRoute = async ({ request, locals }) => {
+  try {
   // 認証チェック
   const auth = await verifyAuth(request);
   if ("error" in auth) {
@@ -62,4 +63,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
   headers.set("Cache-Control", "private, max-age=3600");
 
   return new Response(object.body, { headers });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: "サーバーエラーが発生しました" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 };

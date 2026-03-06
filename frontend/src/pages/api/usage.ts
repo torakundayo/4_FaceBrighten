@@ -3,6 +3,7 @@ import { verifyAuth, createServerSupabase } from "../../lib/auth";
 import { DAILY_LIMIT, MONTHLY_LIMIT, PROCESSING_TIMEOUT_MIN, LOG_RETENTION_DAYS } from "../../lib/constants";
 
 export const GET: APIRoute = async ({ request }) => {
+  try {
   const auth = await verifyAuth(request);
   if ("error" in auth) {
     return new Response(JSON.stringify({ error: auth.error }), {
@@ -67,4 +68,10 @@ export const GET: APIRoute = async ({ request }) => {
       headers: { "Content-Type": "application/json" },
     }
   );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: "サーバーエラーが発生しました" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 };
