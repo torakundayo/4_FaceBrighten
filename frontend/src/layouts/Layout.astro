@@ -25,6 +25,11 @@ const ogImageUrl = new URL(ogImage, siteUrl).href;
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
 
     <!-- OGP -->
     <meta property="og:type" content="website" />
@@ -50,5 +55,10 @@ const ogImageUrl = new URL(ogImage, siteUrl).href;
   </head>
   <body class="bg-surface-950 text-surface-100 antialiased">
     <slot />
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js");
+      }
+    </script>
   </body>
 </html>
