@@ -45,9 +45,14 @@ export default function ImageProcessor() {
   const [activeStep, setActiveStep] = useState(0);
   const [showMask, setShowMask] = useState(false);
   const [brightnessStrength, setBrightnessStrength] = useState(100);
-  const [maxBlobUrl, setMaxBlobUrl] = useState<string | null>(null);
+  const [adjustedBlobUrl, setAdjustedBlobUrl] = useState<string | null>(null);
   const [showAdjust, setShowAdjust] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const adjustedUrlRef = useRef<string | null>(null);
+  const origPixelsRef = useRef<ImageData | null>(null);
+  const procPixelsRef = useRef<ImageData | null>(null);
+  const canvasDimsRef = useRef<{ w: number; h: number } | null>(null);
+  const blendRafRef = useRef<number>(0);
   const sliderRef = useRef<HTMLDivElement>(null);
   const isDraggingSlider = useRef(false);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -66,12 +71,11 @@ export default function ImageProcessor() {
     });
   }, []);
 
-  // Pre-render 200% brightness image for real-time slider preview
+  // Cache pixel data for brightness blending (>100%)
   useEffect(() => {
     if (status !== "completed" || !previewUrl || !resultBlobUrl) return;
 
     let cancelled = false;
-    let createdUrl: string | null = null;
 
     const origImg = new Image();
     const procImg = new Image();
@@ -91,39 +95,18 @@ export default function ImageProcessor() {
         if (!ctx) return;
 
         ctx.drawImage(origImg, 0, 0);
-        const origData = ctx.getImageData(0, 0, w, h);
+        origPixelsRef.current = ctx.getImageData(0, 0, w, h);
         ctx.drawImage(procImg, 0, 0, w, h);
-        const procData = ctx.getImageData(0, 0, w, h);
-
-        // 200% = 2 * processed - original
-        const out = ctx.createImageData(w, h);
-        const od = origData.data;
-        const pd = procData.data;
-        const rd = out.data;
-        for (let i = 0; i < od.length; i += 4) {
-          rd[i] = Math.max(0, Math.min(255, 2 * pd[i] - od[i]));
-          rd[i + 1] = Math.max(0, Math.min(255, 2 * pd[i + 1] - od[i + 1]));
-          rd[i + 2] = Math.max(0, Math.min(255, 2 * pd[i + 2] - od[i + 2]));
-          rd[i + 3] = 255;
-        }
-        ctx.putImageData(out, 0, 0);
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob && !cancelled) {
-              createdUrl = URL.createObjectURL(blob);
-              setMaxBlobUrl(createdUrl);
-            }
-          },
-          "image/jpeg",
-          0.95
-        );
+        procPixelsRef.current = ctx.getImageData(0, 0, w, h);
+        canvasDimsRef.current = { w, h };
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
+      origPixelsRef.current = null;
+      procPixelsRef.current = null;
+      canvasDimsRef.current = null;
     };
   }, [status, previewUrl, resultBlobUrl]);
 
@@ -285,10 +268,12 @@ export default function ImageProcessor() {
     setProcessSec(null);
     setSliderPosition(50);
     setShowMask(false);
-    if (maxBlobUrl) URL.revokeObjectURL(maxBlobUrl);
-    setMaxBlobUrl(null);
+    if (adjustedUrlRef.current) URL.revokeObjectURL(adjustedUrlRef.current);
+    adjustedUrlRef.current = null;
+    setAdjustedBlobUrl(null);
     setBrightnessStrength(100);
     setShowAdjust(false);
+    cancelAnimationFrame(blendRafRef.current);
   }
 
   // Slider logic
@@ -319,6 +304,57 @@ export default function ImageProcessor() {
   const handleSliderPointerUp = useCallback(() => {
     isDraggingSlider.current = false;
   }, []);
+
+  function generateBlend(strength: number) {
+    const orig = origPixelsRef.current;
+    const proc = procPixelsRef.current;
+    const dims = canvasDimsRef.current;
+    if (!orig || !proc || !dims) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = dims.w;
+    canvas.height = dims.h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const out = ctx.createImageData(dims.w, dims.h);
+    const s = strength / 100;
+    const od = orig.data;
+    const pd = proc.data;
+    const rd = out.data;
+    for (let i = 0; i < od.length; i += 4) {
+      rd[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * s));
+      rd[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * s));
+      rd[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * s));
+      rd[i + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          if (adjustedUrlRef.current) URL.revokeObjectURL(adjustedUrlRef.current);
+          const url = URL.createObjectURL(blob);
+          adjustedUrlRef.current = url;
+          setAdjustedBlobUrl(url);
+        }
+      },
+      "image/jpeg",
+      0.95
+    );
+  }
+
+  function handleBrightnessChange(value: number) {
+    setBrightnessStrength(value);
+    if (value > 100) {
+      cancelAnimationFrame(blendRafRef.current);
+      blendRafRef.current = requestAnimationFrame(() => generateBlend(value));
+    } else if (adjustedBlobUrl) {
+      if (adjustedUrlRef.current) URL.revokeObjectURL(adjustedUrlRef.current);
+      adjustedUrlRef.current = null;
+      setAdjustedBlobUrl(null);
+    }
+  }
 
   async function handleDownload() {
     if (!previewUrl || !resultBlobUrl) return;
@@ -561,23 +597,17 @@ export default function ImageProcessor() {
                 className="w-full h-auto block"
                 draggable={false}
               />
-              {/* After image (clipped from right) - opacity-based brightness blending */}
+              {/* After image (clipped from right) */}
               <div
                 className="absolute inset-0"
                 style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }}
               >
                 <img
-                  src={previewUrl}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover"
-                  draggable={false}
-                />
-                <img
-                  src={maxBlobUrl || resultBlobUrl}
+                  src={brightnessStrength > 100 && adjustedBlobUrl ? adjustedBlobUrl : resultBlobUrl}
                   alt="補正後"
                   className="absolute inset-0 w-full h-full object-cover"
                   draggable={false}
-                  style={maxBlobUrl ? { opacity: brightnessStrength / 200 } : undefined}
+                  style={{ opacity: brightnessStrength <= 100 ? brightnessStrength / 100 : 1 }}
                 />
               </div>
               {/* Divider line */}
@@ -601,56 +631,54 @@ export default function ImageProcessor() {
             </div>
 
             {/* Brightness adjustment slider */}
-            {maxBlobUrl && (
-              <div className="bg-surface-800/50 border border-surface-700/50 rounded-xl">
-                <button
-                  onClick={() => setShowAdjust(!showAdjust)}
-                  className="w-full flex items-center justify-between p-6 cursor-pointer"
+            <div className="bg-surface-800/50 border border-surface-700/50 rounded-xl">
+              <button
+                onClick={() => setShowAdjust(!showAdjust)}
+                className="w-full flex items-center justify-between p-6 cursor-pointer"
+              >
+                <h3 className="text-sm font-semibold text-surface-300">
+                  結果を微調整する
+                </h3>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className={`w-4 h-4 text-surface-400 transition-transform ${showAdjust ? "rotate-180" : ""}`}
+                  fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"
                 >
-                  <h3 className="text-sm font-semibold text-surface-300">
-                    結果を微調整する
-                  </h3>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className={`w-4 h-4 text-surface-400 transition-transform ${showAdjust ? "rotate-180" : ""}`}
-                    fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                  </svg>
-                </button>
-                {showAdjust && (
-                  <div className="px-6 pb-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm text-surface-400">明るさ補正</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono text-surface-300">{brightnessStrength}%</span>
-                        {brightnessStrength !== 100 && (
-                          <button
-                            onClick={() => setBrightnessStrength(100)}
-                            className="text-xs text-brand-400 hover:text-brand-300 cursor-pointer"
-                          >
-                            自動に戻す
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      value={brightnessStrength}
-                      onChange={(e) => setBrightnessStrength(Number(e.target.value))}
-                      className="w-full accent-brand-500"
-                    />
-                    <div className="flex justify-between text-xs text-surface-600 mt-1">
-                      <span>補正なし</span>
-                      <span>自動</span>
-                      <span>最大</span>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              {showAdjust && (
+                <div className="px-6 pb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm text-surface-400">明るさ補正</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono text-surface-300">{brightnessStrength}%</span>
+                      {brightnessStrength !== 100 && (
+                        <button
+                          onClick={() => handleBrightnessChange(100)}
+                          className="text-xs text-brand-400 hover:text-brand-300 cursor-pointer"
+                        >
+                          自動に戻す
+                        </button>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
+                  <input
+                    type="range"
+                    min={0}
+                    max={200}
+                    value={brightnessStrength}
+                    onChange={(e) => handleBrightnessChange(Number(e.target.value))}
+                    className="w-full accent-brand-500"
+                  />
+                  <div className="flex justify-between text-xs text-surface-600 mt-1">
+                    <span>補正なし</span>
+                    <span>自動</span>
+                    <span>最大</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Low correction notice */}
             {stats && stats.luminance_before != null && stats.luminance_before >= 90 && (
