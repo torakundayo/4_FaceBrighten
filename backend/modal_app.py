@@ -140,9 +140,13 @@ class ImageProcessor:
         )
 
         # 結果をR2にアップロード（PNG: 背景ピクセルを完全保持）
-        result_key = input_key.replace("uploads/", "results/").replace(
-            ".jpg", "_processed.png"
-        ).replace(".jpeg", "_processed.png").replace(".png", "_processed.png")
+        # 拡張子を除去してから _processed.png を付与
+        base_key = input_key.replace("uploads/", "results/")
+        for ext in (".jpg", ".jpeg", ".png"):
+            if base_key.endswith(ext):
+                base_key = base_key[: -len(ext)]
+                break
+        result_key = base_key + "_processed.png"
 
         result_buffer = io.BytesIO()
         result_image.save(result_buffer, format="PNG")
