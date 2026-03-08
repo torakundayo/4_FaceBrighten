@@ -121,9 +121,11 @@ class ImageProcessor:
             return {"error": "Failed to download image"}, 500
 
         # PIL Imageに変換
-        from PIL import Image
+        from PIL import Image, PngImagePlugin
 
-        pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        pil_orig = Image.open(io.BytesIO(image_bytes))
+        icc_profile = pil_orig.info.get("icc_profile")
+        pil_image = pil_orig.convert("RGB")
 
         # 画像サイズ制限チェック（長辺4000px）
         max_dim = 4000
@@ -149,7 +151,11 @@ class ImageProcessor:
         result_key = base_key + "_processed.png"
 
         result_buffer = io.BytesIO()
-        result_image.save(result_buffer, format="PNG")
+        # ICCプロファイルを保持してPNG保存（ブラウザが同じ色空間で表示）
+        save_kwargs = {}
+        if icc_profile:
+            save_kwargs["icc_profile"] = icc_profile
+        result_image.save(result_buffer, format="PNG", **save_kwargs)
         result_buffer.seek(0)
 
         self.r2.put_object(
