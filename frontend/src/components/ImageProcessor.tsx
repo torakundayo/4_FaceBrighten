@@ -44,16 +44,7 @@ export default function ImageProcessor() {
   const [dragActive, setDragActive] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [showMask, setShowMask] = useState(false);
-  const [brightnessStrength, setBrightnessStrength] = useState(100);
-  const [adjustedBlobUrl, setAdjustedBlobUrl] = useState<string | null>(null);
-  const [showAdjust, setShowAdjust] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const adjustedUrlRef = useRef<string | null>(null);
-  const origPixelsRef = useRef<ImageData | null>(null);
-  const procPixelsRef = useRef<ImageData | null>(null);
-  const canvasDimsRef = useRef<{ w: number; h: number } | null>(null);
-  const blendRafRef = useRef<number>(0);
-  const blendMaskRef = useRef<Float32Array | null>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const isDraggingSlider = useRef(false);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -71,64 +62,6 @@ export default function ImageProcessor() {
       }
     });
   }, []);
-
-  // Cache pixel data for brightness blending (>100%)
-  useEffect(() => {
-    if (status !== "completed" || !previewUrl || !resultBlobUrl) return;
-
-    let cancelled = false;
-
-    const origImg = new Image();
-    const procImg = new Image();
-    origImg.src = previewUrl;
-    procImg.src = resultBlobUrl;
-
-    Promise.all([origImg.decode(), procImg.decode()])
-      .then(() => {
-        if (cancelled) return;
-
-        const w = origImg.naturalWidth;
-        const h = origImg.naturalHeight;
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        ctx.drawImage(origImg, 0, 0);
-        origPixelsRef.current = ctx.getImageData(0, 0, w, h);
-        ctx.drawImage(procImg, 0, 0, w, h);
-        procPixelsRef.current = ctx.getImageData(0, 0, w, h);
-        canvasDimsRef.current = { w, h };
-
-        // Pre-compute blend mask from pixel differences
-        // Background pixels differ by ±1-2 due to JPEG re-encoding noise
-        // Face pixels have large differences from the color grading
-        const od = origPixelsRef.current.data;
-        const pd = procPixelsRef.current.data;
-        const maskData = new Float32Array(w * h);
-        for (let i = 0; i < od.length; i += 4) {
-          const diff =
-            Math.abs(pd[i] - od[i]) +
-            Math.abs(pd[i + 1] - od[i + 1]) +
-            Math.abs(pd[i + 2] - od[i + 2]);
-          // diff <= 4: background (JPEG noise) → 0
-          // diff >= 12: face region → 1
-          // smooth transition in between
-          maskData[i / 4] = Math.min(1, Math.max(0, (diff - 4) / 8));
-        }
-        blendMaskRef.current = maskData;
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      origPixelsRef.current = null;
-      procPixelsRef.current = null;
-      canvasDimsRef.current = null;
-      blendMaskRef.current = null;
-    };
-  }, [status, previewUrl, resultBlobUrl]);
 
   async function fetchUsage() {
     try {
@@ -288,13 +221,6 @@ export default function ImageProcessor() {
     setProcessSec(null);
     setSliderPosition(50);
     setShowMask(false);
-    if (adjustedUrlRef.current) URL.revokeObjectURL(adjustedUrlRef.current);
-    adjustedUrlRef.current = null;
-    setAdjustedBlobUrl(null);
-    setBrightnessStrength(100);
-    setShowAdjust(false);
-    cancelAnimationFrame(blendRafRef.current);
-    blendMaskRef.current = null;
   }
 
   // Slider logic
@@ -326,124 +252,22 @@ export default function ImageProcessor() {
     isDraggingSlider.current = false;
   }, []);
 
-  function generateBlend(strength: number) {
-    const orig = origPixelsRef.current;
-    const proc = procPixelsRef.current;
-    const dims = canvasDimsRef.current;
-    const mask = blendMaskRef.current;
-    if (!orig || !proc || !dims || !mask) return;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = dims.w;
-    canvas.height = dims.h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const out = ctx.createImageData(dims.w, dims.h);
-    const s = strength / 100;
-    const od = orig.data;
-    const pd = proc.data;
-    const rd = out.data;
-    for (let i = 0; i < od.length; i += 4) {
-      const m = mask[i / 4] * s; // mask=0 for background → keeps original
-      rd[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * m));
-      rd[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * m));
-      rd[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * m));
-      rd[i + 3] = 255;
-    }
-    ctx.putImageData(out, 0, 0);
-
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          if (adjustedUrlRef.current) URL.revokeObjectURL(adjustedUrlRef.current);
-          const url = URL.createObjectURL(blob);
-          adjustedUrlRef.current = url;
-          setAdjustedBlobUrl(url);
-        }
-      },
-      "image/jpeg",
-      0.95
-    );
-  }
-
-  function handleBrightnessChange(value: number) {
-    setBrightnessStrength(value);
-    if (value !== 100) {
-      cancelAnimationFrame(blendRafRef.current);
-      blendRafRef.current = requestAnimationFrame(() => generateBlend(value));
-    } else {
-      if (adjustedUrlRef.current) URL.revokeObjectURL(adjustedUrlRef.current);
-      adjustedUrlRef.current = null;
-      setAdjustedBlobUrl(null);
-    }
-  }
-
   async function handleDownload() {
-    if (!previewUrl || !resultBlobUrl) return;
+    if (!resultUrl) return;
     try {
-      if (brightnessStrength === 100) {
-        // Direct download of server result (best quality)
-        const a = document.createElement("a");
-        a.href = resultBlobUrl;
-        a.download = "face_brighten_result.jpg";
-        a.click();
-      } else {
-        // Blend at full resolution with adjusted strength
-        const origImg = new Image();
-        const procImg = new Image();
-        origImg.src = previewUrl;
-        procImg.src = resultBlobUrl;
-        await Promise.all([origImg.decode(), procImg.decode()]);
-
-        const w = origImg.naturalWidth;
-        const h = origImg.naturalHeight;
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d")!;
-
-        ctx.drawImage(origImg, 0, 0);
-        const origData = ctx.getImageData(0, 0, w, h);
-        ctx.drawImage(procImg, 0, 0, w, h);
-        const procData = ctx.getImageData(0, 0, w, h);
-
-        // Build pixel difference mask (same logic as useEffect)
-        const dlMask = new Float32Array(w * h);
-        for (let i = 0; i < origData.data.length; i += 4) {
-          const diff =
-            Math.abs(procData.data[i] - origData.data[i]) +
-            Math.abs(procData.data[i + 1] - origData.data[i + 1]) +
-            Math.abs(procData.data[i + 2] - origData.data[i + 2]);
-          dlMask[i / 4] = Math.min(1, Math.max(0, (diff - 4) / 8));
-        }
-
-        const s = brightnessStrength / 100;
-        const od = origData.data;
-        const pd = procData.data;
-        for (let i = 0; i < od.length; i += 4) {
-          const m = dlMask[i / 4] * s;
-          od[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * m));
-          od[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * m));
-          od[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * m));
-        }
-        ctx.putImageData(origData, 0, 0);
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "face_brighten_result.jpg";
-              a.click();
-              URL.revokeObjectURL(url);
-            }
-          },
-          "image/jpeg",
-          0.95
-        );
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(resultUrl, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "face_brighten_result.jpg";
+      a.click();
+      URL.revokeObjectURL(url);
     } catch {
       setError("ダウンロードに失敗しました");
     }
@@ -637,7 +461,7 @@ export default function ImageProcessor() {
                 style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }}
               >
                 <img
-                  src={brightnessStrength !== 100 && adjustedBlobUrl ? adjustedBlobUrl : resultBlobUrl}
+                  src={resultBlobUrl}
                   alt="補正後"
                   className="absolute inset-0 w-full h-full object-cover"
                   draggable={false}
@@ -661,56 +485,6 @@ export default function ImageProcessor() {
               <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-sm px-3 py-1.5 rounded-full font-medium z-20">
                 補正後
               </div>
-            </div>
-
-            {/* Brightness adjustment slider */}
-            <div className="bg-surface-800/50 border border-surface-700/50 rounded-xl">
-              <button
-                onClick={() => setShowAdjust(!showAdjust)}
-                className="w-full flex items-center justify-between p-6 cursor-pointer"
-              >
-                <h3 className="text-sm font-semibold text-surface-300">
-                  結果を微調整する
-                </h3>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className={`w-4 h-4 text-surface-400 transition-transform ${showAdjust ? "rotate-180" : ""}`}
-                  fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
-              </button>
-              {showAdjust && (
-                <div className="px-6 pb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm text-surface-400">明るさ補正</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono text-surface-300">{brightnessStrength}%</span>
-                      {brightnessStrength !== 100 && (
-                        <button
-                          onClick={() => handleBrightnessChange(100)}
-                          className="text-xs text-brand-400 hover:text-brand-300 cursor-pointer"
-                        >
-                          自動に戻す
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={200}
-                    value={brightnessStrength}
-                    onChange={(e) => handleBrightnessChange(Number(e.target.value))}
-                    className="w-full accent-brand-500"
-                  />
-                  <div className="flex justify-between text-xs text-surface-600 mt-1">
-                    <span>補正なし</span>
-                    <span>自動</span>
-                    <span>最大</span>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Low correction notice */}
