@@ -265,7 +265,7 @@ export default function ImageProcessor() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "face_brighten_result.png";
+      a.download = "face_brighten_result.jpg";
       a.click();
       URL.revokeObjectURL(url);
     } catch {

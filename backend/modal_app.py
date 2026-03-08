@@ -121,7 +121,7 @@ class ImageProcessor:
             return {"error": "Failed to download image"}, 500
 
         # PIL Imageに変換
-        from PIL import Image, PngImagePlugin
+        from PIL import Image
 
         pil_orig = Image.open(io.BytesIO(image_bytes))
         icc_profile = pil_orig.info.get("icc_profile")
@@ -141,28 +141,23 @@ class ImageProcessor:
             pil_image, self.processor, self.model, self.device
         )
 
-        # 結果をR2にアップロード（PNG: 背景ピクセルを完全保持）
-        # 拡張子を除去してから _processed.png を付与
-        base_key = input_key.replace("uploads/", "results/")
-        for ext in (".jpg", ".jpeg", ".png"):
-            if base_key.endswith(ext):
-                base_key = base_key[: -len(ext)]
-                break
-        result_key = base_key + "_processed.png"
+        # 結果をR2にアップロード
+        result_key = input_key.replace("uploads/", "results/").replace(
+            ".jpg", "_processed.jpg"
+        ).replace(".jpeg", "_processed.jpg").replace(".png", "_processed.jpg")
 
         result_buffer = io.BytesIO()
-        # ICCプロファイルを保持してPNG保存（ブラウザが同じ色空間で表示）
-        save_kwargs = {}
+        save_kwargs = {"quality": 95, "subsampling": 0}
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
-        result_image.save(result_buffer, format="PNG", **save_kwargs)
+        result_image.save(result_buffer, format="JPEG", **save_kwargs)
         result_buffer.seek(0)
 
         self.r2.put_object(
             Bucket=self.bucket,
             Key=result_key,
             Body=result_buffer.getvalue(),
-            ContentType="image/png",
+            ContentType="image/jpeg",
         )
 
         process_sec = round(time.time() - start_time, 1)
