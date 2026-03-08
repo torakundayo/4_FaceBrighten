@@ -44,6 +44,9 @@ export default function ImageProcessor() {
   const [dragActive, setDragActive] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [showMask, setShowMask] = useState(false);
+  const [brightnessStrength, setBrightnessStrength] = useState(100);
+  const [maxBlobUrl, setMaxBlobUrl] = useState<string | null>(null);
+  const [showAdjust, setShowAdjust] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const isDraggingSlider = useRef(false);
@@ -62,6 +65,67 @@ export default function ImageProcessor() {
       }
     });
   }, []);
+
+  // Pre-render 200% brightness image for real-time slider preview
+  useEffect(() => {
+    if (status !== "completed" || !previewUrl || !resultBlobUrl) return;
+
+    let cancelled = false;
+    let createdUrl: string | null = null;
+
+    const origImg = new Image();
+    const procImg = new Image();
+    origImg.src = previewUrl;
+    procImg.src = resultBlobUrl;
+
+    Promise.all([origImg.decode(), procImg.decode()])
+      .then(() => {
+        if (cancelled) return;
+
+        const w = origImg.naturalWidth;
+        const h = origImg.naturalHeight;
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.drawImage(origImg, 0, 0);
+        const origData = ctx.getImageData(0, 0, w, h);
+        ctx.drawImage(procImg, 0, 0, w, h);
+        const procData = ctx.getImageData(0, 0, w, h);
+
+        // 200% = 2 * processed - original
+        const out = ctx.createImageData(w, h);
+        const od = origData.data;
+        const pd = procData.data;
+        const rd = out.data;
+        for (let i = 0; i < od.length; i += 4) {
+          rd[i] = Math.max(0, Math.min(255, 2 * pd[i] - od[i]));
+          rd[i + 1] = Math.max(0, Math.min(255, 2 * pd[i + 1] - od[i + 1]));
+          rd[i + 2] = Math.max(0, Math.min(255, 2 * pd[i + 2] - od[i + 2]));
+          rd[i + 3] = 255;
+        }
+        ctx.putImageData(out, 0, 0);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob && !cancelled) {
+              createdUrl = URL.createObjectURL(blob);
+              setMaxBlobUrl(createdUrl);
+            }
+          },
+          "image/jpeg",
+          0.95
+        );
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [status, previewUrl, resultBlobUrl]);
 
   async function fetchUsage() {
     try {
@@ -221,6 +285,10 @@ export default function ImageProcessor() {
     setProcessSec(null);
     setSliderPosition(50);
     setShowMask(false);
+    if (maxBlobUrl) URL.revokeObjectURL(maxBlobUrl);
+    setMaxBlobUrl(null);
+    setBrightnessStrength(100);
+    setShowAdjust(false);
   }
 
   // Slider logic
@@ -253,21 +321,59 @@ export default function ImageProcessor() {
   }, []);
 
   async function handleDownload() {
-    if (!resultUrl) return;
+    if (!previewUrl || !resultBlobUrl) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const res = await fetch(resultUrl, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) throw new Error("Download failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "face_brighten_result.jpg";
-      a.click();
-      URL.revokeObjectURL(url);
+      if (brightnessStrength === 100) {
+        // Direct download of server result (best quality)
+        const a = document.createElement("a");
+        a.href = resultBlobUrl;
+        a.download = "face_brighten_result.jpg";
+        a.click();
+      } else {
+        // Blend at full resolution with adjusted strength
+        const origImg = new Image();
+        const procImg = new Image();
+        origImg.src = previewUrl;
+        procImg.src = resultBlobUrl;
+        await Promise.all([origImg.decode(), procImg.decode()]);
+
+        const w = origImg.naturalWidth;
+        const h = origImg.naturalHeight;
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+
+        ctx.drawImage(origImg, 0, 0);
+        const origData = ctx.getImageData(0, 0, w, h);
+        ctx.drawImage(procImg, 0, 0, w, h);
+        const procData = ctx.getImageData(0, 0, w, h);
+
+        const s = brightnessStrength / 100;
+        const od = origData.data;
+        const pd = procData.data;
+        for (let i = 0; i < od.length; i += 4) {
+          od[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * s));
+          od[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * s));
+          od[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * s));
+        }
+        ctx.putImageData(origData, 0, 0);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "face_brighten_result.jpg";
+              a.click();
+              URL.revokeObjectURL(url);
+            }
+          },
+          "image/jpeg",
+          0.95
+        );
+      }
     } catch {
       setError("ダウンロードに失敗しました");
     }
@@ -455,16 +561,23 @@ export default function ImageProcessor() {
                 className="w-full h-auto block"
                 draggable={false}
               />
-              {/* After image (clipped from right) */}
+              {/* After image (clipped from right) - opacity-based brightness blending */}
               <div
                 className="absolute inset-0"
                 style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }}
               >
                 <img
-                  src={resultBlobUrl}
+                  src={previewUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                  draggable={false}
+                />
+                <img
+                  src={maxBlobUrl || resultBlobUrl}
                   alt="補正後"
                   className="absolute inset-0 w-full h-full object-cover"
                   draggable={false}
+                  style={maxBlobUrl ? { opacity: brightnessStrength / 200 } : undefined}
                 />
               </div>
               {/* Divider line */}
@@ -486,6 +599,58 @@ export default function ImageProcessor() {
                 補正後
               </div>
             </div>
+
+            {/* Brightness adjustment slider */}
+            {maxBlobUrl && (
+              <div className="bg-surface-800/50 border border-surface-700/50 rounded-xl">
+                <button
+                  onClick={() => setShowAdjust(!showAdjust)}
+                  className="w-full flex items-center justify-between p-6 cursor-pointer"
+                >
+                  <h3 className="text-sm font-semibold text-surface-300">
+                    結果を微調整する
+                  </h3>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`w-4 h-4 text-surface-400 transition-transform ${showAdjust ? "rotate-180" : ""}`}
+                    fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {showAdjust && (
+                  <div className="px-6 pb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-sm text-surface-400">明るさ補正</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-surface-300">{brightnessStrength}%</span>
+                        {brightnessStrength !== 100 && (
+                          <button
+                            onClick={() => setBrightnessStrength(100)}
+                            className="text-xs text-brand-400 hover:text-brand-300 cursor-pointer"
+                          >
+                            自動に戻す
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={200}
+                      value={brightnessStrength}
+                      onChange={(e) => setBrightnessStrength(Number(e.target.value))}
+                      className="w-full accent-brand-500"
+                    />
+                    <div className="flex justify-between text-xs text-surface-600 mt-1">
+                      <span>補正なし</span>
+                      <span>自動</span>
+                      <span>最大</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Low correction notice */}
             {stats && stats.luminance_before != null && stats.luminance_before >= 90 && (
