@@ -346,10 +346,10 @@ export default function ImageProcessor() {
 
   function handleBrightnessChange(value: number) {
     setBrightnessStrength(value);
-    if (value > 100) {
+    if (value !== 100) {
       cancelAnimationFrame(blendRafRef.current);
       blendRafRef.current = requestAnimationFrame(() => generateBlend(value));
-    } else if (adjustedBlobUrl) {
+    } else {
       if (adjustedUrlRef.current) URL.revokeObjectURL(adjustedUrlRef.current);
       adjustedUrlRef.current = null;
       setAdjustedBlobUrl(null);
@@ -603,11 +603,10 @@ export default function ImageProcessor() {
                 style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }}
               >
                 <img
-                  src={brightnessStrength > 100 && adjustedBlobUrl ? adjustedBlobUrl : resultBlobUrl}
+                  src={brightnessStrength !== 100 && adjustedBlobUrl ? adjustedBlobUrl : resultBlobUrl}
                   alt="補正後"
                   className="absolute inset-0 w-full h-full object-cover"
                   draggable={false}
-                  style={{ opacity: brightnessStrength <= 100 ? brightnessStrength / 100 : 1 }}
                 />
               </div>
               {/* Divider line */}
