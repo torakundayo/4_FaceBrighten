@@ -53,6 +53,7 @@ export default function ImageProcessor() {
   const procPixelsRef = useRef<ImageData | null>(null);
   const canvasDimsRef = useRef<{ w: number; h: number } | null>(null);
   const blendRafRef = useRef<number>(0);
+  const blendMaskRef = useRef<Float32Array | null>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const isDraggingSlider = useRef(false);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -99,6 +100,24 @@ export default function ImageProcessor() {
         ctx.drawImage(procImg, 0, 0, w, h);
         procPixelsRef.current = ctx.getImageData(0, 0, w, h);
         canvasDimsRef.current = { w, h };
+
+        // Pre-compute blend mask from pixel differences
+        // Background pixels differ by ±1-2 due to JPEG re-encoding noise
+        // Face pixels have large differences from the color grading
+        const od = origPixelsRef.current.data;
+        const pd = procPixelsRef.current.data;
+        const maskData = new Float32Array(w * h);
+        for (let i = 0; i < od.length; i += 4) {
+          const diff =
+            Math.abs(pd[i] - od[i]) +
+            Math.abs(pd[i + 1] - od[i + 1]) +
+            Math.abs(pd[i + 2] - od[i + 2]);
+          // diff <= 4: background (JPEG noise) → 0
+          // diff >= 12: face region → 1
+          // smooth transition in between
+          maskData[i / 4] = Math.min(1, Math.max(0, (diff - 4) / 8));
+        }
+        blendMaskRef.current = maskData;
       })
       .catch(() => {});
 
@@ -107,6 +126,7 @@ export default function ImageProcessor() {
       origPixelsRef.current = null;
       procPixelsRef.current = null;
       canvasDimsRef.current = null;
+      blendMaskRef.current = null;
     };
   }, [status, previewUrl, resultBlobUrl]);
 
@@ -274,6 +294,7 @@ export default function ImageProcessor() {
     setBrightnessStrength(100);
     setShowAdjust(false);
     cancelAnimationFrame(blendRafRef.current);
+    blendMaskRef.current = null;
   }
 
   // Slider logic
@@ -309,7 +330,8 @@ export default function ImageProcessor() {
     const orig = origPixelsRef.current;
     const proc = procPixelsRef.current;
     const dims = canvasDimsRef.current;
-    if (!orig || !proc || !dims) return;
+    const mask = blendMaskRef.current;
+    if (!orig || !proc || !dims || !mask) return;
 
     const canvas = document.createElement("canvas");
     canvas.width = dims.w;
@@ -323,9 +345,10 @@ export default function ImageProcessor() {
     const pd = proc.data;
     const rd = out.data;
     for (let i = 0; i < od.length; i += 4) {
-      rd[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * s));
-      rd[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * s));
-      rd[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * s));
+      const m = mask[i / 4] * s; // mask=0 for background → keeps original
+      rd[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * m));
+      rd[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * m));
+      rd[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * m));
       rd[i + 3] = 255;
     }
     ctx.putImageData(out, 0, 0);
@@ -385,13 +408,24 @@ export default function ImageProcessor() {
         ctx.drawImage(procImg, 0, 0, w, h);
         const procData = ctx.getImageData(0, 0, w, h);
 
+        // Build pixel difference mask (same logic as useEffect)
+        const dlMask = new Float32Array(w * h);
+        for (let i = 0; i < origData.data.length; i += 4) {
+          const diff =
+            Math.abs(procData.data[i] - origData.data[i]) +
+            Math.abs(procData.data[i + 1] - origData.data[i + 1]) +
+            Math.abs(procData.data[i + 2] - origData.data[i + 2]);
+          dlMask[i / 4] = Math.min(1, Math.max(0, (diff - 4) / 8));
+        }
+
         const s = brightnessStrength / 100;
         const od = origData.data;
         const pd = procData.data;
         for (let i = 0; i < od.length; i += 4) {
-          od[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * s));
-          od[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * s));
-          od[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * s));
+          const m = dlMask[i / 4] * s;
+          od[i] = Math.max(0, Math.min(255, od[i] + (pd[i] - od[i]) * m));
+          od[i + 1] = Math.max(0, Math.min(255, od[i + 1] + (pd[i + 1] - od[i + 1]) * m));
+          od[i + 2] = Math.max(0, Math.min(255, od[i + 2] + (pd[i + 2] - od[i + 2]) * m));
         }
         ctx.putImageData(origData, 0, 0);
 
