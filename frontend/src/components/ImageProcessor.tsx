@@ -170,7 +170,6 @@ export default function ImageProcessor() {
       setProcessSec(data.process_sec ?? null);
 
       // Fetch result image with auth to create a blob URL for preview
-      // Then composite with original to eliminate JPEG background noise
       if (data.download_url) {
         try {
           const imgRes = await fetch(data.download_url, {
@@ -178,57 +177,7 @@ export default function ImageProcessor() {
           });
           if (imgRes.ok) {
             const blob = await imgRes.blob();
-            const rawUrl = URL.createObjectURL(blob);
-
-            // Composite: use original pixels for background, server result for face
-            const origImg = new Image();
-            const procImg = new Image();
-            origImg.src = previewUrl!;
-            procImg.src = rawUrl;
-            try {
-              await Promise.all([origImg.decode(), procImg.decode()]);
-              const w = origImg.naturalWidth;
-              const h = origImg.naturalHeight;
-              const cvs = document.createElement("canvas");
-              cvs.width = w;
-              cvs.height = h;
-              const cx = cvs.getContext("2d");
-              if (cx) {
-                cx.drawImage(origImg, 0, 0);
-                const origData = cx.getImageData(0, 0, w, h);
-                cx.drawImage(procImg, 0, 0, w, h);
-                const procData = cx.getImageData(0, 0, w, h);
-                const od = origData.data;
-                const pd = procData.data;
-                // For each pixel: if RGB diff is tiny (JPEG noise), keep original
-                for (let i = 0; i < od.length; i += 4) {
-                  const diff =
-                    Math.abs(pd[i] - od[i]) +
-                    Math.abs(pd[i + 1] - od[i + 1]) +
-                    Math.abs(pd[i + 2] - od[i + 2]);
-                  if (diff <= 6) {
-                    // Background: use original pixel exactly
-                    pd[i] = od[i];
-                    pd[i + 1] = od[i + 1];
-                    pd[i + 2] = od[i + 2];
-                  }
-                }
-                cx.putImageData(procData, 0, 0);
-                const compositeBlob = await new Promise<Blob | null>((resolve) =>
-                  cvs.toBlob(resolve, "image/png")
-                );
-                URL.revokeObjectURL(rawUrl);
-                if (compositeBlob) {
-                  setResultBlobUrl(URL.createObjectURL(compositeBlob));
-                } else {
-                  setResultBlobUrl(URL.createObjectURL(blob));
-                }
-              } else {
-                setResultBlobUrl(rawUrl);
-              }
-            } catch {
-              setResultBlobUrl(rawUrl);
-            }
+            setResultBlobUrl(URL.createObjectURL(blob));
           }
         } catch {
           // Preview will fall back to not showing, download still works
@@ -316,7 +265,7 @@ export default function ImageProcessor() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "face_brighten_result.jpg";
+      a.download = "face_brighten_result.png";
       a.click();
       URL.revokeObjectURL(url);
     } catch {

@@ -139,20 +139,20 @@ class ImageProcessor:
             pil_image, self.processor, self.model, self.device
         )
 
-        # 結果をR2にアップロード
+        # 結果をR2にアップロード（PNG: 背景ピクセルを完全保持）
         result_key = input_key.replace("uploads/", "results/").replace(
-            ".jpg", "_processed.jpg"
-        ).replace(".jpeg", "_processed.jpg").replace(".png", "_processed.jpg")
+            ".jpg", "_processed.png"
+        ).replace(".jpeg", "_processed.png").replace(".png", "_processed.png")
 
         result_buffer = io.BytesIO()
-        result_image.save(result_buffer, format="JPEG", quality=95, subsampling=0)
+        result_image.save(result_buffer, format="PNG")
         result_buffer.seek(0)
 
         self.r2.put_object(
             Bucket=self.bucket,
             Key=result_key,
             Body=result_buffer.getvalue(),
-            ContentType="image/jpeg",
+            ContentType="image/png",
         )
 
         process_sec = round(time.time() - start_time, 1)
